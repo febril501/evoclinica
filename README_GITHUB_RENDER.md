@@ -1,46 +1,40 @@
-# EvoClínica 0.4 — Publicación en GitHub y Render (grupo pequeño)
+# EvoClínica 0.5 — Activar Gemini gratuito en tu GitHub + Render actual
 
-**Tipo de lanzamiento: demostración y uso académico, únicamente con datos ficticios o verdaderamente desidentificados.** No admite fichas reales identificables.
+Esta actualización **reemplaza OpenAI por Gemini** en la versión de EvoClínica para compañeros. Conserva cuentas, rutas, plantillas, especialidades y el módulo Psiquiatría (examen mental). No crea una base de datos ni sincroniza perfiles entre dispositivos.
 
-## 1. Crear repositorio
+## Qué tienes que hacer (sin comandos)
 
-1. En https://github.com/new crea `evoclinica-grupo` en modo **Private**.
-2. Selecciona `uploading an existing file` y carga el **contenido** de esta carpeta (no el ZIP entero). Incluye `server.js`, `auth.js`, `index.html`, `psiquiatria.html`, `package.json` y `render.yaml`.
-3. No subas archivos `.env`, contraseñas, claves API, historias clínicas ni evoluciones con datos personales.
+1. **Guarda un respaldo de estilos** desde la aplicación antes de actualizar. Aunque los cambios de código normalmente no borran `localStorage` del mismo dominio, es prudente conservarlos.
+2. Descarga y descomprime `EvoClinica_0.5_Gemini_Gratis.zip`.
+3. En tu repositorio existente **github.com/febril501/evoclinica** (o el que tengas), entra en la rama `main` → **Add file → Upload files**. Arrastra **el contenido de la carpeta descomprimida**, no el ZIP ni la carpeta contenedora, y confirma el commit. Los nombres (`server.js`, `app.js`, `psiquiatria.html`, `render.yaml`, etc.) deben estar en la **raíz** del repositorio, junto a `package.json`. Cuando GitHub advierta archivos repetidos, confirma su sustitución. Si la interfaz web no admite la sustitución, edita los archivos o usa GitHub Desktop para hacer el commit; evita crear una carpeta adicional.
+4. En **Google AI Studio** (https://aistudio.google.com/app/apikey) crea una clave de Gemini para un proyecto con acceso al nivel gratuito. La API es un producto separado de ChatGPT. Comprueba en AI Studio los límites aplicables a tu proyecto y modelo.
+5. En **Render → tu servicio actual → Environment**, sin borrar `APP_USERS_JSON` ni `NODE_ENV`, agrega:
 
-## 2. Publicar desde Render
+   | Key | Value |
+   | --- | --- |
+   | `GEMINI_API_KEY` | tu clave privada de Google AI Studio |
+   | `GEMINI_MODEL` | `gemini-3.5-flash-lite` (opcional; valor predeterminado) |
 
-1. En https://dashboard.render.com registra una cuenta y conecta GitHub, autorizando el repositorio.
-2. Pulsa **New → Web Service**, selecciona el repositorio. No uses Static Site.
-3. Runtime: **Node**. Build command: `npm install --omit=dev`. Start command: `npm start`. Plan Free para pruebas, u otro disponible.
-4. En **Environment** agrega:
-   - `NODE_ENV` = `production`
-   - `APP_USERS_JSON` = `{"claudio":"CONTRASENA-LARGA-PROPIA","leo":"OTRA-CONTRASENA-LARGA"}` (reemplaza nombres/contraseñas con valores reales privados, al menos 12 caracteres; son cuentas de demo)
-   - `OPENAI_API_KEY` = clave API privada (opcional, pero imprescindible para IA)
-   - `OPENAI_MODEL` = `gpt-4.1-mini` (opcional)
-5. Pulsa **Deploy**. Render asigna HTTPS en `https://<nombre>.onrender.com`. Comparte la dirección y las credenciales individuales **por separado y por vía privada**.
-6. Actualizaciones: cambia archivos en GitHub y Render hará nuevos despliegues automáticos según su configuración.
+   `OPENAI_API_KEY` y `OPENAI_MODEL` ya no se usan. Puedes **eliminarlas de Render**, sin compartir el valor. No metas una clave en GitHub ni en JavaScript/HTML.
+6. Guarda con **Save, deploy**. Si Render está configurado con Auto-Deploy desde GitHub, cualquier commit en `main` también puede disparar un nuevo despliegue.
+7. Espera el estado **Live**, entra en tu **misma URL** de Render y usa un ejemplo ficticio en **Psiquiatría → Redactar con IA**. La pantalla debe mostrar `● IA disponible`.
 
-También puedes utilizar el `render.yaml` proporcionado creando un Blueprint; el proceso con Web Service es más fácil de seguir inicialmente.
+Si aparece **modelo no disponible** (404), revisa en Google AI Studio qué modelos tiene habilitados tu proyecto y actualiza `GEMINI_MODEL` en Render. Si aparece **límite gratuito** (429), revisa el panel de cuotas de AI Studio; no significa que la aplicación esté rota. No hay fallback automático a una API de pago.
 
-## Acceso al grupo y limitaciones de seguridad
+## ¿Cuánto cuesta?
 
-- Cada miembro inicia sesión con su usuario y contraseña (definidos exclusivamente como variables secretas en Render); las sesiones duran hasta 12 horas y se cierran con «Cerrar sesión».
-- Las preferencias y estilos **se guardan solamente en localStorage** por cuenta en cada navegador. No se sincronizan entre dispositivos ni constituyen aislamiento criptográfico entre usuarios del mismo equipo. **No compartan navegador/perfil de Windows, no usen dispositivos públicos.** Utilicen Exportar/Importar estilos para pasar preferencias al otro equipo.
-- El servidor no tiene base de datos de casos ni guarda las evoluciones; las solicitudes de IA envían contenido al proveedor. Una lista heurística de identificadores **no reemplaza la desidentificación**.
-- Hay límites básicos de intentos de contraseña (8 por 15 minutos por IP observable) y 20 llamadas IA por hora por nombre de usuario (reinician al reiniciar el servidor). Estos controles son **solo para un piloto**, no seguridad de producción.
-- El uso con datos clínicos identificables requiere, antes de su despliegue, control individual de acceso robusto, base de datos cifrada, autenticación gestionada, protección de cuentas, auditoría, permisos, evaluación institucional de privacidad, contratos y revisión de la normativa chilena aplicable.
-- **No publiques GitHub Pages** para la versión con IA: GitHub Pages no ejecuta el servidor Node.js de EvoClínica.
-- El servicio gratuito de Render puede suspenderse por inactividad y tardar en iniciar. La API del modelo cuesta adicionalmente por consumo y depende de límites de tu cuenta.
+El modelo predeterminado `gemini-3.5-flash-lite` aparece con acceso gratuito de entrada/salida para proyectos elegibles, con **cupos por minuto/día que dependen del proyecto**. Estos pueden cambiar: https://ai.google.dev/gemini-api/docs/pricing y https://ai.google.dev/gemini-api/docs/rate-limits. El plan gratuito de Render puede suspender el servidor por inactividad. Esta versión no requiere añadir tarjeta para un proyecto ya habilitado en nivel gratuito, salvo que Google te lo solicite por condiciones específicas; **no actives facturación para seguir esta ruta de prueba**.
 
-## Funcionamiento local
+## Privacidad — leer antes de usar
 
-Sin `NODE_ENV=production` ni `APP_USERS_JSON`, `npm start` sigue funcionando solo en `127.0.0.1:3030` sin login para desarrollo. Para probar la pantalla de login en local, establece `APP_USERS_JSON` en tu entorno. No edites código para incrustar contraseñas.
+**En el nivel gratuito, Google puede utilizar las entradas y salidas para mejorar sus productos. No envíes datos clínicos de pacientes reales, aunque hayas quitado el RUT o el nombre.** La seudonimización o eliminación de identificadores evidentes no garantiza anonimato y las notas psiquiátricas son particularmente sensibles. Esta compilación es solo para **casos sintéticos/ficticios**, aprendizaje y validación de estilo. No es un sistema asistencial, no sustituye evaluación médica y exige revisar cada frase. El filtro local de identificadores detecta únicamente algunos patrones obvios.
 
-## Pruebas
+## Verificaciones
 
-`npm test` ejecuta las pruebas de la versión anterior y las nuevas comprobaciones de acceso y despliegue.
+- Mantiene login por `APP_USERS_JSON` y `/login`.
+- `GET /api/status` informa `provider: Gemini` si `GEMINI_API_KEY` existe.
+- Los endpoints `/api/generate` y `/api/psychiatry` hacen peticiones desde el servidor a Google con la clave privada, sin exponerla al navegador.
+- El servidor **no conserva las evoluciones**; estilos guardados en `localStorage` por navegador y nombre de usuario. Sin sincronización remota todavía.
+- Ejecuta `npm test` si deseas comprobar la integración sin hacer llamadas reales ni incurrir en consumo de Gemini.
 
-## Operación
-
-**No es una aplicación clínica validada ni un EHR**. El profesional comprueba toda salida; los apartados no evaluados, y especialmente suicidabilidad, no pueden rellenarse por inferencia. Sin clave API, las plantillas locales funcionan, pero no existe redacción inteligente automática.
+La API real debe probarse en tu cuenta después de cargar la clave. Las pruebas incluidas utilizan respuestas simuladas y no verifican cuotas ni permisos reales de tu proyecto de Google.

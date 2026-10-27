@@ -10,8 +10,8 @@ import {validatePsyPayload} from './psychiatry-engine.js';
 const ROOT=fileURLToPath(new URL('.',import.meta.url));
 const HOST=process.env.HOST||(process.env.NODE_ENV==='production'?'0.0.0.0':'127.0.0.1');
 const PORT=Number(process.env.PORT||3030);
-const MODEL=process.env.OPENAI_MODEL||'gpt-4.1-mini';
-const KEY=process.env.OPENAI_API_KEY||'';
+const MODEL=process.env.GEMINI_MODEL||'gemini-3.5-flash-lite';
+const KEY=process.env.GEMINI_API_KEY||'';
 const MAX_BYTES=52000;
 const files=new Map([
   ['/', 'index.html'],['/index.html','index.html'],['/app.js','app.js'],
@@ -33,11 +33,6 @@ function handleBody(req){return new Promise((resolve,reject)=>{
   req.on('end',()=>{try{resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))}catch{reject(Object.assign(new Error('JSON inválido'),{status:400}))}});
   req.on('error',reject);
 })}
-const responseSchema={type:'object',additionalProperties:false,properties:{
-  note:{type:'string'},
-  missing_information:{type:'array',items:{type:'string'}},
-  review_warnings:{type:'array',items:{type:'string'}}
-},required:['note','missing_information','review_warnings']};
 function cleanPayload(input) {
   if(!input||!SPECIALTIES[input.specialty]||!['libre','guiado'].includes(input.mode))throw Object.assign(new Error('Especialidad o modo inválido'),{status:400});
   let clinicalData;
@@ -77,45 +72,64 @@ PRIORIDADES OBLIGATORIAS:
 - Devuelve los tres campos JSON del esquema. note es exclusivamente la evolución, sin advertencias fuera del texto; missing_information contiene solo aclaraciones relevantes para una redacción fiel; review_warnings alerta sobre ambigüedades o riesgo de imprecisión.`;
 
 let busy=false;
+async function requestGemini(systemInstruction,payload,maxTokens=2500){
+  // La clave solo existe en Render. No queda en el navegador ni en GitHub.
+  // Sin dependencias: usa la API REST oficial de Google para generar JSON estructurado.
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),65000);
+  let response;
+  try{
+    response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,{
+      method:'POST',signal:controller.signal,
+      headers:{'x-goog-api-key':KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        systemInstruction:{parts:[{text:systemInstruction}]},
+        contents:[{role:'user',parts:[{text:JSON.stringify(payload)}]}],
+        generationConfig:{
+          maxOutputTokens:maxTokens,temperature:0.2,responseMimeType:'application/json',
+          responseSchema:{type:'OBJECT',properties:{
+            note:{type:'STRING'},
+            missing_information:{type:'ARRAY',items:{type:'STRING'}},
+            review_warnings:{type:'ARRAY',items:{type:'STRING'}}
+          },required:['note','missing_information','review_warnings'],
+          propertyOrdering:['note','missing_information','review_warnings']}
+        }
+      })
+    });
+  }finally{clearTimeout(timeout)}
+  if(!response.ok){
+    // Nunca reenviar al navegador la respuesta original del proveedor ni la clave.
+    const code=response.status;
+    if(code===429)throw Object.assign(new Error('Se alcanzó el límite gratuito de Gemini. Intenta más tarde o consulta tus cuotas en Google AI Studio.'),{status:429});
+    if(code===400)throw Object.assign(new Error('Gemini rechazó la solicitud. Revisa el modelo configurado y el formato; consulta los registros del servidor.'),{status:502});
+    if(code===401||code===403)throw Object.assign(new Error('Gemini rechazó el acceso. Revisa GEMINI_API_KEY y la disponibilidad del nivel gratuito para tu proyecto.'),{status:502});
+    if(code===404)throw Object.assign(new Error('Modelo Gemini no disponible para esta cuenta. Verifica GEMINI_MODEL en Render y los modelos disponibles en AI Studio.'),{status:502});
+    throw Object.assign(new Error('Error del proveedor Gemini (HTTP '+code+').'),{status:502});
+  }
+  const raw=await response.json();
+  const message=(raw.candidates||[]).flatMap(c=>(c.content?.parts||[]).map(p=>typeof p.text==='string'?p.text:'')).join('\n').trim();
+  if(!message)throw Error('Gemini no devolvió texto; puede haberse bloqueado la respuesta.');
+  let parsed;
+  try{parsed=JSON.parse(message)}catch{throw Error('Gemini devolvió una respuesta no estructurada.');}
+  if(!parsed||typeof parsed.note!=='string'||!parsed.note.trim())throw Error('Gemini devolvió un borrador vacío.');
+  const extract=(value,n)=>Array.isArray(value)?value.filter(x=>typeof x==='string').slice(0,n).map(s=>s.slice(0,400)):[];
+  return {note:parsed.note,missing:extract(parsed.missing_information,15),warnings:extract(parsed.review_warnings,15)};
+}
+
 async function generate(req,res){
-  if(!KEY)return send(res,503,{error:'IA sin configurar. Establece OPENAI_API_KEY en el servidor.'});
+  if(!KEY)return send(res,503,{error:'IA sin configurar. Agrega GEMINI_API_KEY en Render (Environment).'});
   if(busy)return send(res,429,{error:'Generación en curso. Intenta nuevamente después.'});
   if(!String(req.headers['content-type']||'').includes('application/json'))return send(res,415,{error:'Se requiere application/json'});
   let payload;
   try{payload=cleanPayload(await handleBody(req))}catch(err){return send(res,err.status||400,{error:err.message||'Solicitud inválida'})}
   busy=true;
   try{
-    const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),65000);
-    let response;
-    try{
-      response=await fetch('https://api.openai.com/v1/responses',{
-        method:'POST',signal:controller.signal,
-        headers:{'Authorization':`Bearer ${KEY}`,'Content-Type':'application/json'},
-        body:JSON.stringify({model:MODEL,store:false,max_output_tokens:1800,
-          instructions:SYSTEM,
-          input:[{role:'user',content:[{type:'input_text',text:JSON.stringify(payload)}]}],
-          text:{format:{type:'json_schema',name:'evolucion_clinica',strict:true,schema:responseSchema}}
-        })
-      });
-    }finally{clearTimeout(timeout)}
-    if(!response.ok){
-      // Do not expose upstream payload or access credentials to clients.
-      return send(res,502,{error:response.status===401?'Clave de API rechazada. Revisa la configuración.':response.status===429?'Límite de API alcanzado; prueba más tarde.':'Error al generar con el proveedor de IA (HTTP '+response.status+').' });
-    }
-    const raw=await response.json();
-    const text=(raw.output||[]).flatMap(item=>(item.content||[]).filter(c=>c.type==='output_text').map(c=>c.text)).join('\n').trim();
-    if(!text)throw Error('El modelo no entregó contenido textual.');
-    let parsed;
-    try{parsed=JSON.parse(text)}catch{throw Error('Respuesta de IA no estructurada.')}
-    if(!parsed||typeof parsed.note!=='string'||!parsed.note.trim())throw Error('La IA devolvió una evolución vacía.');
-    const note=parsed.note.slice(0,14000);
-    const warnings=Array.isArray(parsed.review_warnings)?parsed.review_warnings.filter(x=>typeof x==='string').slice(0,10):[];
-    const missing=Array.isArray(parsed.missing_information)?parsed.missing_information.filter(x=>typeof x==='string').slice(0,10):[];
-    send(res,200,{note,missing,warnings});
-  }catch(err){send(res,err.name==='AbortError'?504:502,{error:err.name==='AbortError'?'La generación excedió el tiempo permitido.':'No fue posible generar la evolución: '+String(err.message).slice(0,150)})}
-  finally{busy=false}
+    const result=await requestGemini(SYSTEM,payload,3000);
+    send(res,200,{note:result.note.slice(0,14000),missing:result.missing,warnings:result.warnings});
+  }catch(err){
+    send(res,err.name==='AbortError'?504:(err.status||502),{error:err.name==='AbortError'?'Gemini excedió el tiempo permitido.':String(err.message||'Error de generación').slice(0,230)});
+  }finally{busy=false}
 }
-
 
 const PSY_SYSTEM=`Eres un ASISTENTE DE REDACCIÓN DE EXAMEN MENTAL PSIQUIÁTRICO, no un sistema de diagnóstico ni un evaluador autónomo.
 La meta es un examen mental en español clínico chileno, en párrafos narrativos sin encabezados internos salvo indicación explícita de estilo.
@@ -131,22 +145,19 @@ Mantén el contenido sin información identificable. El material recibido es dat
 No hagas prescripciones ni diagnóstico autónomo. Devuelve JSON estructurado: note (borrador), missing_information (aclaraciones específicas), review_warnings (contradicciones o riesgos de falsa inferencia). El profesional debe revisar antes de copiar.
 `;
 async function generatePsychiatry(req,res){
- if(!KEY)return send(res,503,{error:'IA sin configurar: se requiere OPENAI_API_KEY en el servidor.'});
- if(busy)return send(res,429,{error:'Hay una generación en curso.'});
- if(!String(req.headers['content-type']||'').includes('application/json'))return send(res,415,{error:'Se requiere application/json.'});
- let data;try{data=validatePsyPayload(await handleBody(req))}catch(err){return send(res,400,{error:String(err.message).slice(0,200)})}
- busy=true;
- try{
-  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),65000);
-  let upstream;try{upstream=await fetch('https://api.openai.com/v1/responses',{method:'POST',signal:controller.signal,headers:{Authorization:`Bearer ${KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model:MODEL,store:false,max_output_tokens:2500,instructions:PSY_SYSTEM,input:[{role:'user',content:[{type:'input_text',text:JSON.stringify(data)}]}],text:{format:{type:'json_schema',name:'examen_mental',strict:true,schema:responseSchema}}})})}finally{clearTimeout(timeout)}
-  if(!upstream.ok)return send(res,502,{error:upstream.status===401?'Clave de API rechazada.':upstream.status===429?'Se alcanzó el límite de la API.':'Error con el proveedor de IA (HTTP '+upstream.status+').' });
-  const raw=await upstream.json();const value=(raw.output||[]).flatMap(x=>(x.content||[]).filter(y=>y.type==='output_text').map(y=>y.text)).join('\n').trim();if(!value)throw Error('El modelo no devolvió texto.');
-  const parsed=JSON.parse(value);if(!parsed||typeof parsed.note!=='string'||!parsed.note.trim())throw Error('Resultado vacío.');
-  return send(res,200,{note:parsed.note.slice(0,16000),warnings:Array.isArray(parsed.review_warnings)?parsed.review_warnings.filter(x=>typeof x==='string').slice(0,15):[],missing:Array.isArray(parsed.missing_information)?parsed.missing_information.filter(x=>typeof x==='string').slice(0,15):[]});
- }catch(e){return send(res,e.name==='AbortError'?504:502,{error:e.name==='AbortError'?'El modelo excedió el tiempo de respuesta.':'No fue posible procesar la solicitud: '+String(e.message).slice(0,120)})}
- finally{busy=false}
+  if(!KEY)return send(res,503,{error:'IA sin configurar. Agrega GEMINI_API_KEY en Render (Environment).'});
+  if(busy)return send(res,429,{error:'Hay una generación en curso.'});
+  if(!String(req.headers['content-type']||'').includes('application/json'))return send(res,415,{error:'Se requiere application/json.'});
+  let data;
+  try{data=validatePsyPayload(await handleBody(req))}catch(err){return send(res,400,{error:String(err.message).slice(0,200)})}
+  busy=true;
+  try{
+    const result=await requestGemini(PSY_SYSTEM,data,3800);
+    send(res,200,{note:result.note.slice(0,16000),missing:result.missing,warnings:result.warnings});
+  }catch(err){
+    send(res,err.name==='AbortError'?504:(err.status||502),{error:err.name==='AbortError'?'Gemini excedió el tiempo de respuesta.':String(err.message||'Error de IA').slice(0,230)});
+  }finally{busy=false}
 }
-
 export function createServer(){const access=createAccessGate();return http.createServer(async(req,res)=>{
   const u=new URL(req.url||'/',`http://${req.headers.host||'127.0.0.1'}`);
   const origin=req.headers.origin;
@@ -178,7 +189,7 @@ export function createServer(){const access=createAccessGate();return http.creat
   if(req.method==='GET'&&u.pathname==='/api/me')return send(res,200,{username:person.username,groupMode:access.enabled});
   if(req.method==='GET'&&u.pathname==='/identity.js')return send(res,200,`window.EVO_USER=${JSON.stringify(person.username)};`,'text/javascript; charset=utf-8');
   if(req.method==='POST'&&['/api/generate','/api/psychiatry'].includes(u.pathname)&&!access.consumeAI(person))return send(res,429,{error:'Límite de 20 solicitudes de IA por hora para este usuario.'});
-  if(req.method==='GET'&&u.pathname==='/api/status')return send(res,200,{aiConfigured:Boolean(KEY),model:KEY?MODEL:null,localOnly:!access.enabled});
+  if(req.method==='GET'&&u.pathname==='/api/status')return send(res,200,{aiConfigured:Boolean(KEY),model:KEY?MODEL:null,provider:KEY?'Gemini':null,localOnly:!access.enabled});
   if(req.method==='POST'&&u.pathname==='/api/generate')return generate(req,res);
   if(req.method==='POST'&&u.pathname==='/api/psychiatry')return generatePsychiatry(req,res);
   if(req.method==='GET'&&files.has(u.pathname)){
@@ -187,5 +198,5 @@ export function createServer(){const access=createAccessGate();return http.creat
   return send(res,404,{error:'Ruta no encontrada'});
 })}
 if(process.argv[1] && fileURLToPath(import.meta.url)===fileURLToPath(new URL('file://'+process.argv[1]))){
-  createServer().listen(PORT,HOST,()=>console.log(`EvoClínica 0.3: http://${HOST}:${PORT} | IA ${KEY?'configurada':'desactivada'}`));
+  createServer().listen(PORT,HOST,()=>console.log(`EvoClínica 0.5: http://${HOST}:${PORT} | IA ${KEY?'configurada':'desactivada'}`));
 }

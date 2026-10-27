@@ -1,88 +1,40 @@
-# EvoClínica 0.3 — Examen mental y evoluciones clínicas
+# EvoClínica 0.5 — Gemini gratuito para grupos
 
-**Proyecto personal funcional / prototipo experimental.** Incluye las ocho especialidades de EvoClínica 0.2 y un nuevo módulo especializado de **Psiquiatría → Examen mental**. Es una herramienta de **documentación y revisión**, no de diagnóstico ni de tratamiento.
+EvoClínica conserva los módulos por especialidad y el **examen mental psiquiátrico avanzado**. Ahora conecta con **Gemini** desde un servidor Node.js sin exponer las claves al navegador.
 
-## Qué contiene el módulo de Psiquiatría
+**Si ya publicaste la versión 0.4 en GitHub + Render, lee primero `README_GITHUB_RENDER.md`**: incluye el procedimiento para actualizar la misma URL y mantener los usuarios.
 
-- **Texto libre + formulario simultáneos:** 12 componentes de examen mental; cada uno en estado **No evaluado**, **Normal confirmado** o **Alterado**. Los alterados ofrecen categorías psicopatológicas y campos adicionales.
-- **Plantilla basal editable**, independiente por estilo: se aplica solo a hallazgos confirmados; nunca completa automáticamente suicidalidad, contenido del pensamiento, sensopercepción, insight o juicio de realidad a partir de «resto normal».
-- **5 estilos:** control breve, examen completo, ingreso, ambulatorio y personalizado; permiten editar extensión, párrafos, orden de 12 componentes, frases normales y expresiones a evitar.
-- **Biblioteca de ejemplos:** analiza textos ficticios o desidentificados para recuperar orden aproximado, expresiones frecuentes y longitud. Tras aprobación, guarda **solo las preferencias abstractas**, no el examen antiguo.
-- **Redacción narrativa con IA opcional:** generación, reescritura, orden, ampliación limitada a hechos constatados, resumen, actualización desde examen previo y asistente de instrucciones.
-- **Revisión de cambios:** las transformaciones aparecen como propuestas, que pueden aceptarse o rechazarse. Si se conservan igual número de párrafos, se permite aceptar **párrafos individuales**.
-- **Alertas preliminares de contradicción** y estado de secciones no exploradas; editor completo, historial de hasta 10 versiones **durante la sesión**, glosario clínico y exportación TXT / Word compatible (.doc) / impresión o PDF del navegador.
-- **Aprendizaje supervisado de correcciones:** «Aprender corrección» adapta el estilo al texto aprobado. No reentrena ni modifica internamente el modelo generativo.
+## Funcionalidades conservadas
 
-### Límites funcionales
+- Redacción desde texto libre y formularios por especialidad.
+- Módulo Psiquiatría con 12 componentes, plantillas basales normales solo para hallazgos confirmados y cinco estilos.
+- Biblioteca de ejemplos y aprendizaje supervisado de preferencias de escritura, no de diagnósticos.
+- Reescritura, resumen, actualización, propuestas y revisión del borrador con Gemini.
+- Identificación preliminar de algunas contradicciones y de algunos identificadores; ninguna garantía de validación o anonimización.
+- Gestión de cuentas grupales básicas con `APP_USERS_JSON`.
 
-**Sin API de IA**, la opción **Plantilla local** combina hallazgos confirmados y preserva el texto libre **sin interpretarlo, clasificarlo ni reescribirlo**. La transformación automática desde notas abreviadas a prosa profesional **requiere API**; se probó con una respuesta simulada, pero **no con credenciales reales** en este entorno.
+## Activar la IA en Render
 
-Las alertas son heurísticas incompletas. No hacen examen mental, no infieren ausencia de suicidalidad ni aseguran ausencia de errores de la IA. Ni los estilos ni los datos observados constituyen un sistema de aprendizaje clínico autónomo.
+Configura como **variables secretas**, nunca en GitHub:
 
-## 1. Ejecutar en Windows, Mac o Linux
+- `GEMINI_API_KEY`: clave privada obtenida en https://aistudio.google.com/app/apikey
+- `GEMINI_MODEL`: opcional; `gemini-3.5-flash-lite` (predeterminado)
+- Mantén `APP_USERS_JSON` y `NODE_ENV=production` tal como los tienes.
 
-1. Descarga y descomprime el ZIP.
-2. Instala **Node.js versión 20 o superior** desde https://nodejs.org.
-3. En Windows, abre `INICIAR_WINDOWS.cmd`. En Mac/Linux, ejecuta `./INICIAR_MAC_LINUX.sh` (puede requerir permiso de ejecución) o `npm start` desde la carpeta. **No necesitas npm install**.
-4. Visita `http://127.0.0.1:3030` y selecciona **Psiquiatría** en el panel de especialidades, o abre directamente `http://127.0.0.1:3030/psiquiatria`.
-5. Pulsa **Cargar ejemplo ficticio** y **Plantilla local** para probar sin gastar dinero.
+Esta versión ya no utiliza `OPENAI_API_KEY` ni `OPENAI_MODEL`. Las solicitudes se realizan mediante `POST /v1beta/models/{modelo}:generateContent` en la API de Gemini. Cada llamada solicita JSON estructurado y se revisa el resultado antes de presentarlo como **borrador**. El servidor responde sin revelar errores internos completos ni claves privadas.
 
-> El HTML abierto como archivo `file://` no es la forma correcta de ejecutar esta aplicación: usa el servidor local incluido.
+Si falta la clave, **Plantilla local** sigue disponible. Si Google devuelve un error 429, se informa que se ha agotado el límite de uso gratuito y se recomienda consultar las cuotas en AI Studio. Sin fallback de pago.
 
-## 2. Configurar IA opcional
+## Riesgos y límites
 
-Necesitas una clave independiente de OpenAI API con facturación habilitada. **No debes colocar claves en archivos HTML/JS ni subirlas a GitHub.**
+**Uso académico exclusivamente con casos ficticios/sintéticos.** En el nivel gratuito de Gemini, Google puede emplear entradas y salidas para mejorar sus productos. No enviar datos clínicos de pacientes reales al servicio, especialmente contenidos psiquiátricos. No hay garantías de que datos sin nombre/RUT sean anónimos. El material generado puede contener errores y debe ser revisado por un profesional. Ni validación clínica ni cumplimiento asistencial están certificados.
 
-**Windows PowerShell (en la carpeta del proyecto):**
+La aplicación no almacena las evoluciones en una base de datos; perfiles guardados en el navegador, sin sincronización entre equipos. `APP_USERS_JSON` proporciona un inicio de sesión básico adecuado únicamente para piloto controlado.
 
-```powershell
-$env:OPENAI_API_KEY="TU_CLAVE_DE_API"
-npm start
-```
+## Pruebas y ejecución local
 
-**macOS/Linux (en la carpeta del proyecto):**
+`npm test` ejecuta pruebas de estructuras, privacidad heurística, auth básica y Gemini simulado.
 
-```sh
-export OPENAI_API_KEY="TU_CLAVE_DE_API"
-npm start
-```
+`npm start` abre http://127.0.0.1:3030 localmente (requiere Node.js ≥20).
 
-Variable opcional: `OPENAI_MODEL` (el proyecto trae un nombre de modelo predeterminado). El servidor llama a la Responses API con `store:false` y envía datos solo cuando presionas un botón de IA. Esto no excluye todo posible procesamiento o conservación técnica del proveedor; revisa condiciones y autorizaciones aplicables. El servidor no mantiene una base persistente de borradores.
-
-## 3. Cómo enseñarle tu estilo
-
-1. Abre `Psiquiatría` → `Biblioteca de estilos`.
-2. Escoge «Control breve», «Examen completo», «Ingreso» u otro.
-3. Pega una evolución **sintética o desidentificada** y marca la confirmación.
-4. Pulsa «Analizar ejemplo» y revisa los rasgos detectados antes de «Guardar estilo aprendido».
-5. Puedes modificar manualmente el orden, las frases normales y las expresiones preferidas.
-6. Esos perfiles se guardan en el **almacenamiento local de ese navegador**; expórtalos a JSON para respaldarlos o trasladarlos de dispositivo.
-7. Al corregir un borrador, marca que lo revisaste y selecciona «Aprender corrección» para actualizar el estilo.
-
-El programa **no guarda el texto completo** de ejemplos ni de evoluciones en `localStorage`. Sí permanecen visibles mientras están en el formulario y, en caso de los borradores, temporalmente en memoria durante la sesión. Los respaldos contienen preferencias de estilo, no fichas clínicas.
-
-## 4. Privacidad, ética y validación
-
-- **No ingresar datos reales identificables de pacientes** a este prototipo. La detección parcial de identificadores no es un proceso de desidentificación fiable.
-- Si se configura IA, parte de la información proporcionada se transfiere al proveedor externo. Usa datos sintéticos o desidentificados; no lo conectes a fichas reales sin una evaluación de privacidad, seguridad, autorización institucional, controles de acceso, cifrado, registro de auditoría y validación clínica.
-- El servidor se enlaza de forma predeterminada solo a `127.0.0.1` y **no está listo para exposición pública**. No publicarlo abriendo puertos sin protección.
-- Todos los textos son **borradores**: el profesional tiene que revisar contenido, omisiones, contradicciones, temporalidad, terminología y consistencia con su evaluación.
-- Las alertas del programa ayudan, pero pueden fallar; no deben emplearse como validación clínica automatizada.
-
-## 5. Pruebas
-
-```sh
-npm test
-```
-
-Las pruebas incluyen formulario, prevención de normalidades no exploradas, riesgo suicida, contradicciones conocidas, aprendizaje de estilo sin almacenamiento del ejemplo, exposición del módulo y un servidor con **respuesta de IA simulada** (sin gastos).
-
-## Archivos clave
-
-- `psiquiatria.html`, `psychiatry.css`, `psychiatry.js`: interfaz especializada.
-- `psychiatry-engine.js`: 12 componentes, normalidad confirmada, validaciones y perfiles de estilo.
-- `server.js`: servidor local y endpoint `/api/psychiatry` para un modelo de IA opcional.
-- `index.html`, `app.js`, `specialties.js`, `engine.js`: EvoClínica general de 0.2 conservada.
-- `sw.js`, `manifest.webmanifest`, `icons/`: recursos de aplicación instalable.
-
-**Versión:** 0.3, desarrollo experimental para uso personal con información ficticia/desidentificada.
+Documentación de Google: https://ai.google.dev/gemini-api/docs/pricing · https://ai.google.dev/gemini-api/docs/rate-limits · https://ai.google.dev/gemini-api/docs/api-key
