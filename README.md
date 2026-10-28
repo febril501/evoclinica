@@ -1,40 +1,47 @@
-# EvoClínica 0.5 — Gemini gratuito para grupos
+# TORA 0.7 · Rediseño visual de EvoClínica 0.6
 
-EvoClínica conserva los módulos por especialidad y el **examen mental psiquiátrico avanzado**. Ahora conecta con **Gemini** desde un servidor Node.js sin exponer las claves al navegador.
+**TORA** es la nueva identidad visual provisional del proyecto académico EvoClínica. Conserva las rutas de generación clínica y Gemini; el cambio principal es la interfaz. El nombre aún requiere revisión de disponibilidad de marca y dominio.
 
-**Si ya publicaste la versión 0.4 en GitHub + Render, lee primero `README_GITHUB_RENDER.md`**: incluye el procedimiento para actualizar la misma URL y mantener los usuarios.
+## Qué incluye
 
-## Funcionalidades conservadas
+- Nueva página de inicio `GET /` con acceso a **ingreso**, **evolución del día**, **control ambulatorio**, especialidades y estilos.
+- Interfaz rediseñada `GET /flujo` inspirada en el prototipo visual aprobado: barra lateral, formularios, áreas de evolución anterior y cambios del día, revisión de hallazgos y editor de Gemini.
+- Marca TORA con **el símbolo felino proporcionado por el usuario**, sin eslogan, y colores `#D35400`, `#8B4513`, `#E7C6A8`, `#1F2937`, `#F8F6F2`.
+- Tipografía Manrope (títulos) e Inter (texto), cargadas desde Google Fonts si hay conexión, con fuente del sistema como alternativa.
+- Diseño adaptable a móvil y computador; interruptor de apariencia oscura que guarda la preferencia local.
+- Inicio de sesión rediseñado; se mantiene `APP_USERS_JSON` y las sesiones del grupo.
+- Psiquiatría conserva el examen mental avanzado; se actualiza la identidad visual.
+- Editor anterior de EvoClínica 0.6 conservado en `/herramientas` para la biblioteca de estilos y las funciones de entrada libre.
+- Endpoints de IA `/api/generate`, `/api/psychiatry` y `/api/workflow` sin modificaciones en su contrato.
+- Íconos de PWA actualizados a TORA.
 
-- Redacción desde texto libre y formularios por especialidad.
-- Módulo Psiquiatría con 12 componentes, plantillas basales normales solo para hallazgos confirmados y cinco estilos.
-- Biblioteca de ejemplos y aprendizaje supervisado de preferencias de escritura, no de diagnósticos.
-- Reescritura, resumen, actualización, propuestas y revisión del borrador con Gemini.
-- Identificación preliminar de algunas contradicciones y de algunos identificadores; ninguna garantía de validación o anonimización.
-- Gestión de cuentas grupales básicas con `APP_USERS_JSON`.
+## Uso
 
-## Activar la IA en Render
+```bash
+npm test
+npm start
+```
 
-Configura como **variables secretas**, nunca en GitHub:
+Requiere Node.js 20 o posterior. Abre `http://127.0.0.1:3030`. En Windows puedes ejecutar `INICIAR_WINDOWS.cmd` si ya tienes Node.js.
 
-- `GEMINI_API_KEY`: clave privada obtenida en https://aistudio.google.com/app/apikey
-- `GEMINI_MODEL`: opcional; `gemini-3.5-flash-lite` (predeterminado)
-- Mantén `APP_USERS_JSON` y `NODE_ENV=production` tal como los tienes.
+En Render, mantén **sin cambios** las variables existentes:
 
-Esta versión ya no utiliza `OPENAI_API_KEY` ni `OPENAI_MODEL`. Las solicitudes se realizan mediante `POST /v1beta/models/{modelo}:generateContent` en la API de Gemini. Cada llamada solicita JSON estructurado y se revisa el resultado antes de presentarlo como **borrador**. El servidor responde sin revelar errores internos completos ni claves privadas.
+- `APP_USERS_JSON` (usuarios del grupo)
+- `NODE_ENV=production`
+- `GEMINI_API_KEY` (secreto solo en Render)
+- `GEMINI_MODEL` (modelo habilitado para tu proyecto)
 
-Si falta la clave, **Plantilla local** sigue disponible. Si Google devuelve un error 429, se informa que se ha agotado el límite de uso gratuito y se recomienda consultar las cuotas en AI Studio. Sin fallback de pago.
+No incluyas ninguna contraseña o clave real en GitHub. La misma URL de Render debería seguir funcionando si actualizas el repositorio conectado y conservas el servicio.
 
-## Riesgos y límites
+## Seguridad y privacidad
 
-**Uso académico exclusivamente con casos ficticios/sintéticos.** En el nivel gratuito de Gemini, Google puede emplear entradas y salidas para mejorar sus productos. No enviar datos clínicos de pacientes reales al servicio, especialmente contenidos psiquiátricos. No hay garantías de que datos sin nombre/RUT sean anónimos. El material generado puede contener errores y debe ser revisado por un profesional. Ni validación clínica ni cumplimiento asistencial están certificados.
+**Solo casos totalmente ficticios para el piloto académico.** TORA no está validada para uso asistencial ni información identificable de pacientes. Gemini en nivel gratuito puede utilizar datos enviados para mejorar productos, según las condiciones del proveedor. La IA genera **borradores sujetos a revisión**, no diagnósticos ni indicaciones autónomas.
 
-La aplicación no almacena las evoluciones en una base de datos; perfiles guardados en el navegador, sin sincronización entre equipos. `APP_USERS_JSON` proporciona un inicio de sesión básico adecuado únicamente para piloto controlado.
+Los textos de evoluciones no se guardan en base de datos. Los perfiles de estilo continúan en `localStorage` del navegador por usuario; no hay sincronización entre dispositivos. La personalización no supone aprendizaje de parámetros del modelo.
 
-## Pruebas y ejecución local
+## Limitaciones de esta versión
 
-`npm test` ejecuta pruebas de estructuras, privacidad heurística, auth básica y Gemini simulado.
-
-`npm start` abre http://127.0.0.1:3030 localmente (requiere Node.js ≥20).
-
-Documentación de Google: https://ai.google.dev/gemini-api/docs/pricing · https://ai.google.dev/gemini-api/docs/rate-limits · https://ai.google.dev/gemini-api/docs/api-key
+- El rediseño se ha comprobado visualmente con una representación estática del formulario en escritorio y móvil, mientras la lógica se ha verificado con pruebas automatizadas; la integración en tu instancia real de Render y con tu clave de Gemini debe probarse después de desplegar.
+- El selector «Por sistemas / Por problemas» cambia el **formato de redacción** del borrador; todavía no convierte automáticamente los apartados de entrada en una lista editable de diagnósticos.
+- El modo oscuro se aplica plenamente a inicio y flujos, mientras el editor clásico y Psiquiatría conservan su propia hoja visual, adaptada a la nueva marca.
+- Para activar un dominio `tora.cl` o el que prefieras, debes registrarlo y vincularlo a Render por separado; renombrar la interfaz no registra una marca ni cambia automáticamente la URL.

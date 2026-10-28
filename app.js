@@ -68,7 +68,7 @@ function init(){safeLoad();const select=$('specialty'),learnSelect=$('learn-spec
   $('export-profiles').addEventListener('click',()=>download('evoclinica_estilos_v02.json',JSON.stringify({format:'evoclinica-styles',version:2,profiles:state.profiles},null,2),'application/json'));
   $('import-profiles').addEventListener('click',()=>$('import-file').click());
   $('import-file').addEventListener('change',ev=>{importBackup(ev.target.files[0]);ev.target.value=''});
-  setSpecialty('interna');setMode('libre');renderNav();checkStatus();
+  setSpecialty('interna');setMode('libre');renderNav();checkStatus();const deepLink=location.hash.replace('#','');if(['aprender','biblioteca','acerca'].includes(deepLink))setPage(deepLink);
   if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('/sw.js').catch(()=>{});
 }
 init();
