@@ -69,6 +69,16 @@ export const SPECIALTIES = {
       ['plan','Plan',[['conducta','Manejo y educación','Intervenciones e indicaciones definidas']]],
     ]
   },
+  ginecologia: {
+    name: 'Ginecología y Obstetricia', abbr: 'GO', icon: '🤰', subtitle: 'Antecedentes reproductivos, evaluación ginecológica y obstétrica',
+    sections: [
+      ['contexto','Antecedentes ginecoobstétricos',[['motivo','Motivo de atención','Solo datos referidos'],['antecedentes','Gestaciones / partos / pérdidas / cesáreas / hijos vivos','Registra conteos por separado'],['fur','FUR, anticoncepción, embarazo actual','Datos confirmados; no infieras EG']]],
+      ['subjetivo','Síntomas',[['sintomas','Dolor, sangrado y otros síntomas','Hallazgos referidos hoy']]],
+      ['objetivo','Evaluación dirigida',[['vitales','Signos vitales','Valores documentados'],['examen','Examen ginecológico/obstétrico','Solo maniobras efectivamente realizadas'],['estudios','Ecografía y exámenes','Resultados disponibles']]],
+      ['analisis','Análisis',[['problemas','Problemas evaluados','Solo los documentados']]],
+      ['plan','Plan',[['conducta','Conductas y seguimiento','Decisiones del equipo tratante']]],
+    ]
+  },
   aps: {
     name: 'Atención Primaria', abbr: 'APS', icon: '🌿', subtitle: 'Control longitudinal y acuerdos',
     sections: [

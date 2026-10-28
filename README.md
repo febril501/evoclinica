@@ -1,47 +1,60 @@
-# TORA 0.7 · Rediseño visual de EvoClínica 0.6
+# TORA 0.8 — Rediseño funcional
 
-**TORA** es la nueva identidad visual provisional del proyecto académico EvoClínica. Conserva las rutas de generación clínica y Gemini; el cambio principal es la interfaz. El nombre aún requiere revisión de disponibilidad de marca y dominio.
+TORA es un prototipo académico de asistencia para **redacción de evoluciones clínicas de casos ficticios**, con Node.js, interfaz web y API Gemini. No es un sistema de ficha clínica validado y **no debe recibir información identificable de pacientes reales**.
 
-## Qué incluye
+## Qué cambia desde TORA 0.7
 
-- Nueva página de inicio `GET /` con acceso a **ingreso**, **evolución del día**, **control ambulatorio**, especialidades y estilos.
-- Interfaz rediseñada `GET /flujo` inspirada en el prototipo visual aprobado: barra lateral, formularios, áreas de evolución anterior y cambios del día, revisión de hallazgos y editor de Gemini.
-- Marca TORA con **el símbolo felino proporcionado por el usuario**, sin eslogan, y colores `#D35400`, `#8B4513`, `#E7C6A8`, `#1F2937`, `#F8F6F2`.
-- Tipografía Manrope (títulos) e Inter (texto), cargadas desde Google Fonts si hay conexión, con fuente del sistema como alternativa.
-- Diseño adaptable a móvil y computador; interruptor de apariencia oscura que guarda la preferencia local.
-- Inicio de sesión rediseñado; se mantiene `APP_USERS_JSON` y las sesiones del grupo.
-- Psiquiatría conserva el examen mental avanzado; se actualiza la identidad visual.
-- Editor anterior de EvoClínica 0.6 conservado en `/herramientas` para la biblioteca de estilos y las funciones de entrada libre.
-- Endpoints de IA `/api/generate`, `/api/psychiatry` y `/api/workflow` sin modificaciones en su contrato.
-- Íconos de PWA actualizados a TORA.
+- **Inicio simplificado**: solo **Nueva evolución** y **Actualizar evolución**, con acceso a **Mis formatos clínicos**. Se eliminan del inicio el control ambulatorio y el acceso independiente al examen mental.
+- **Mis formatos clínicos**: editor de títulos ordenados e instrucciones para cada especialidad. Puede extraer encabezados de una plantilla; descarta el contenido que venga después de `:`. Después de generar una evolución, el usuario puede guardar una nueva regla de estilo desde un acordeón opcional (aprendizaje supervisado). Solo se guardan títulos y reglas, no evoluciones. Permite exportar/importar respaldos JSON.
+- **Actualización diaria**: pega la evolución anterior, registra los cambios actuales y permite complementar con formularios opcionales. Gemini recibe ambos contextos por separado y evita presentar hallazgos antiguos como actuales.
+- **Psiquiatría**: examen mental como acordeón dentro de los apartados clínicos, con 14 grupos psicopatológicos, opciones excluyentes, selección múltiple cuando corresponde y descripción libre. Incluye edad aparente frente a cronológica, contextura, ánimo/afectividad, velocidad/curso/contenido del pensamiento, sensopercepción, insight, juicio de realidad y evaluación de riesgo.
+- **Ginecología y Traumatología**: formularios específicos opcionales; se conservan las otras especialidades del motor previo.
+- **Panel derecho**: dedicación a la evolución generada, editable; avisos clínicos breves y confirmación antes de copiar.
+- **Identidad**: colores terracota/grafito/marfil, logo TORA, modos claro/oscuro y diseño adaptable.
 
-## Uso
+## Limitaciones importantes
 
-```bash
+- **Supabase NO está integrado**. Los formatos se guardan en `localStorage`, separados por nombre de usuario, pero solo en el navegador donde se configuraron. Usa el botón de respaldo para cambiarlos de dispositivo. No existe historial de evoluciones sincronizado por cuenta.
+- Enseñar un formato **no reentrena Gemini**: el servidor incorpora los títulos e instrucciones validados en cada solicitud, respetando la información aportada.
+- La IA puede equivocarse. Los borradores deben ser revisados clínicamente antes de utilizarlos. No se infieren hallazgos normales, ausencia de suicidabilidad ni tratamiento administrado por omisión.
+- El esquema local sin Gemini es un **resumen estructurado**, no una evolución redactada profesionalmente por IA.
+- En la actualización diaria, la evolución anterior es obligatoria; para redactar sin una previa usa «Nueva evolución».
+
+## Instalar y ejecutar
+
+Requisitos: **Node.js 20 o superior**.
+
+```sh
 npm test
 npm start
 ```
 
-Requiere Node.js 20 o posterior. Abre `http://127.0.0.1:3030`. En Windows puedes ejecutar `INICIAR_WINDOWS.cmd` si ya tienes Node.js.
+En desarrollo local, sin `NODE_ENV=production` ni `APP_USERS_JSON`, el servidor permite el modo local en `http://127.0.0.1:3030`.
 
-En Render, mantén **sin cambios** las variables existentes:
+En Render, mantener variables de entorno existentes:
 
-- `APP_USERS_JSON` (usuarios del grupo)
-- `NODE_ENV=production`
-- `GEMINI_API_KEY` (secreto solo en Render)
-- `GEMINI_MODEL` (modelo habilitado para tu proyecto)
+| Variable | Uso |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `APP_USERS_JSON` | Cuentas del grupo (objeto JSON) |
+| `GEMINI_API_KEY` | Clave privada de Gemini; **nunca** al repositorio |
+| `GEMINI_MODEL` | Modelo Gemini habilitado en la cuenta |
 
-No incluyas ninguna contraseña o clave real en GitHub. La misma URL de Render debería seguir funcionando si actualizas el repositorio conectado y conservas el servicio.
+## Rutas clave
 
-## Seguridad y privacidad
+- `/` — Inicio
+- `/flujo?tipo=ingreso` — Nueva evolución
+- `/flujo?tipo=diaria` — Actualizar evolución
+- `/formatos` — Mis formatos clínicos
+- `/configuracion` — Configuración
+- `/psiquiatria` — Redirige a la evolución con Psiquiatría seleccionada
 
-**Solo casos totalmente ficticios para el piloto académico.** TORA no está validada para uso asistencial ni información identificable de pacientes. Gemini en nivel gratuito puede utilizar datos enviados para mejorar productos, según las condiciones del proveedor. La IA genera **borradores sujetos a revisión**, no diagnósticos ni indicaciones autónomas.
+Los endpoints existentes `/api/generate`, `/api/psychiatry` y `/api/workflow` continúan disponibles para compatibilidad. Las anteriores opciones de `docType` se aceptan internamente por compatibilidad, pero no se muestran como modalidades independientes.
 
-Los textos de evoluciones no se guardan en base de datos. Los perfiles de estilo continúan en `localStorage` del navegador por usuario; no hay sincronización entre dispositivos. La personalización no supone aprendizaje de parámetros del modelo.
+## Pruebas
 
-## Limitaciones de esta versión
+```sh
+npm test
+```
 
-- El rediseño se ha comprobado visualmente con una representación estática del formulario en escritorio y móvil, mientras la lógica se ha verificado con pruebas automatizadas; la integración en tu instancia real de Render y con tu clave de Gemini debe probarse después de desplegar.
-- El selector «Por sistemas / Por problemas» cambia el **formato de redacción** del borrador; todavía no convierte automáticamente los apartados de entrada en una lista editable de diagnósticos.
-- El modo oscuro se aplica plenamente a inicio y flujos, mientras el editor clásico y Psiquiatría conservan su propia hoja visual, adaptada a la nueva marca.
-- Para activar un dominio `tora.cl` o el que prefieras, debes registrarlo y vincularlo a Render por separado; renombrar la interfaz no registra una marca ni cambia automáticamente la URL.
+La versión incluye pruebas unitarias, endpoints y flujos de Gemini simulados. Una ejecución de laboratorio no sustituye pruebas con usuarios, revisión clínica, pruebas de accesibilidad ni de despliegue real con claves de Gemini.

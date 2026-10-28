@@ -1,5 +1,7 @@
 import {FLOW_SPECIALTIES,DOC_TYPES} from './workflow-config.js';
 import {scanSensitive,validateProfile} from './engine.js';
+import {validateClinicalFormat} from './clinical-formats.js';
+import {validateMentalExam,mentalExamFacts} from './mental-exam.js';
 
 const strip=s=>typeof s==='string'?s.trim():'';
 const MAX_NOTE=2200;
@@ -13,7 +15,7 @@ export function presentSection(section,original){
 export function emptyWorkflow(specialty='interna',docType='diaria'){
   if(!FLOW_SPECIALTIES[specialty])specialty='interna';
   if(!DOC_TYPES[docType])docType='diaria';
-  return {specialty,docType,previous:'',general:'',sections:FLOW_SPECIALTIES[specialty].sections.map(s=>({id:s.id,status:'pendiente',notes:'',selected:[],source:'no_precisada'})),obstetrics:{pregnancy:'no_informado',gestas:'',partos:'',perdidas:'',cesareas:'',vivos:'',fur:'',eg:'',fpp:''},trauma:{region:'rodilla',side:'no_informado',maneuver:'',result:''},custom:[],format:'adaptable',profile:null};
+  return {specialty,docType,previous:'',general:'',sections:FLOW_SPECIALTIES[specialty].sections.map(s=>({id:s.id,status:'pendiente',notes:'',selected:[],source:'no_precisada'})),obstetrics:{pregnancy:'no_informado',gestas:'',partos:'',perdidas:'',cesareas:'',vivos:'',fur:'',eg:'',fpp:''},trauma:{region:'rodilla',side:'no_informado',maneuver:'',result:''},custom:[],mentalExam:[],clinicalFormat:null,format:'adaptable',profile:null};
 }
 export function validateWorkflow(input){
   if(!input||typeof input!=='object'||!FLOW_SPECIALTIES[input.specialty]||!DOC_TYPES[input.docType])throw Error('Especialidad o modalidad inválida.');
@@ -59,17 +61,19 @@ export function validateWorkflow(input){
   if(!Array.isArray(input.custom)||input.custom.length>4)throw Error('Máximo cuatro apartados personalizados.');
   const custom=input.custom.map((s,i)=>({id:'personal_'+i,label:strip(s.label).slice(0,65),status:statuses.includes(s.status)?s.status:'pendiente',notes:strip(s.notes).slice(0,MAX_NOTE),source:sourceChoices.includes(s.source)?s.source:'no_precisada'}));
   if(custom.some(s=>!s.label||s.status==='pendiente'&&s.notes||s.status!=='pendiente'&&!s.notes))throw Error('Revisa los apartados personalizados y sus observaciones.');
+  const mentalExam=input.specialty==='psiquiatria'?validateMentalExam(input.mentalExam):[];
   const obsData=obs?Object.entries(obs).filter(([k,v])=>Boolean(v)&&v!=='no_informado').map(([k,v])=>`${k}: ${v}`).join(' '):'';
   const traumaData=trauma&&(trauma.result||trauma.side!=='no_informado')?[trauma.region,trauma.side!=='no_informado'?trauma.side:'',trauma.maneuver,trauma.result].join(' '):'';
-  const info=[general,...sections.flatMap(s=>[s.notes,...s.selected]),...custom.map(s=>s.notes),obsData,traumaData].join(' ').trim();
+  const info=[general,...sections.flatMap(s=>[s.notes,...s.selected]),...custom.map(s=>s.notes),mentalExamFacts(mentalExam),obsData,traumaData].join(' ').trim();
   if(info.length<12)throw Error('Escribe al menos un hallazgo actual o información del ingreso/control.');
-  if(input.docType==='diaria'&&!previous)throw Error('Pega la evolución anterior para utilizar el comparador; para una evaluación sin evolución previa, usa Ingreso o Control.');
-  if(input.docType==='diaria'&&!general&&!sections.some(s=>s.status!=='pendiente')&&!custom.some(s=>s.status!=='pendiente'))throw Error('Registra al menos un cambio o hallazgo del día.');
+  if(input.docType==='diaria'&&!previous)throw Error('Pega la evolución anterior para actualizarla; si no tienes una evolución previa, selecciona Nueva evolución.');
+  if(input.docType==='diaria'&&!general&&!mentalExam.length&&!sections.some(s=>s.status!=='pendiente')&&!custom.some(s=>s.status!=='pendiente')&&!obsData&&!traumaData)throw Error('Registra al menos un cambio o hallazgo del día.');
   const allText=[previous,info,typeof input.profile?.instruction==='string'?input.profile.instruction:''].join('\n');
   const hazards=scanSensitive(allText);if(hazards.length)throw Error('Posibles identificadores detectados: '+hazards.join(', ')+'. Usa solo casos ficticios.');
   const format=['adaptable','narrativo','sistemas','problemas'].includes(input.format)?input.format:'adaptable';
+  const clinicalFormat=input.clinicalFormat?validateClinicalFormat(input.clinicalFormat,input.specialty):null;
   const profile=validateProfile(input.profile,input.specialty);
-  return {specialty:input.specialty,specialtyName:spec.name,docType:input.docType,docTypeName:DOC_TYPES[input.docType].label,previous:input.docType==='diaria'?previous:'',general,sections,obstetrics:obs,trauma,custom,format,profile};
+  return {specialty:input.specialty,specialtyName:spec.name,docType:input.docType,docTypeName:DOC_TYPES[input.docType].label,previous:input.docType==='diaria'?previous:'',general,sections,obstetrics:obs,trauma,custom,mentalExam,clinicalFormat,format,profile};
 }
 export function workflowFindings(data){
  const warnings=[],missing=[];
@@ -81,7 +85,7 @@ export function workflowFindings(data){
    if(part.status==='igual'&&!part.notes&&!part.selected?.length)warnings.push(`${part.label}: no se detalló lo confirmado.`);
    if(part.source==='no_precisada')warnings.push(`${part.label}: no se precisó si es referido, observado o documentado.`);
  }
- if(data.specialty==='psiquiatria'&&data.docType==='diaria'&&!data.sections.some(s=>s.id==='riesgo'&&s.status!=='pendiente'))missing.push('Riesgo suicida: sin reevaluación actual documentada; no debe interpretarse como negativo.');
+ if(data.specialty==='psiquiatria'&&!data.mentalExam?.some(s=>s.id==='riesgo')&&!data.sections.some(s=>s.id==='riesgo'&&s.status!=='pendiente'))missing.push('Suicidalidad: exploración actual no registrada; nunca interpretar como negativa por omisión.');
  if(data.specialty==='ginecologia'&&data.obstetrics?.pregnancy==='si'&&!data.obstetrics.eg)missing.push('Gestación actual: edad gestacional no informada.');
  if(data.specialty==='traumatologia'&&data.trauma?.maneuver&&!data.trauma.result)warnings.push('Maniobra consignada sin resultado.');
  return {warnings,missing};
@@ -89,6 +93,7 @@ export function workflowFindings(data){
 export function workflowLocalDraft(data){
  const title=`${data.docTypeName.toUpperCase()} · ${data.specialtyName.toUpperCase()}`;
  const lines=[title];
+ if(data.clinicalFormat?.headings?.length)lines.push('\nESTRUCTURA PREFERIDA (REVISAR Y ORGANIZAR MANUALMENTE)\n'+data.clinicalFormat.headings.join(' · '));
  // El borrador local nunca copia los datos anteriores; solo los cambios actuales confirmados.
  if(data.docType==='diaria')lines.push('\n[La evolución anterior se utilizó únicamente para la revisión comparativa; no se incorpora aquí como exploración actual.]');
  if(data.general)lines.push('\nNOVEDADES REGISTRADAS HOY\n'+data.general);
@@ -100,6 +105,7 @@ export function workflowLocalDraft(data){
  if(data.trauma&&(data.trauma.result||data.trauma.side!=='no_informado')){
    lines.push('\nLOCALIZACIÓN / MANIOBRA\n'+`Región: ${data.trauma.region}`+(data.trauma.side!=='no_informado'?` · Lado: ${data.trauma.side}`:'')+(data.trauma.result?` · ${data.trauma.maneuver}: ${data.trauma.result}`:''));
  }
+ if(data.mentalExam?.length)lines.push('\nEXAMEN MENTAL · HALLAZGOS CONSIGNADOS\n'+mentalExamFacts(data.mentalExam));
  for(const s of [...data.sections,...data.custom]){
    if(s.status==='pendiente')continue;
    const pieces=[...(s.selected||[]),s.notes].filter(Boolean);
