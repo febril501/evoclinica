@@ -1,8 +1,7 @@
 // Formularios académicos; los textos son opciones de registro, nunca diagnósticos automáticos.
 export const DOC_TYPES = {
   ingreso:{label:'Evaluación de ingreso',subtitle:'Antecedentes, evaluación inicial y plan de ingreso'},
-  diaria:{label:'Evolución del día',subtitle:'Evolución previa, novedades y hallazgos actuales confirmados'},
-  control:{label:'Control ambulatorio',subtitle:'Seguimiento de síntomas, adherencia y plan del control'}
+  diaria:{label:'Evolución del día',subtitle:'Evolución previa, novedades y hallazgos actuales confirmados'}
 };
 const section=(id,label,quick=[],hint='',keywords=[])=>({id,label,quick,hint,keywords});
 export const FLOW_SPECIALTIES = {

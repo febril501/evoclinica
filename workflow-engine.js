@@ -5,6 +5,8 @@ import {validateMentalExam,mentalExamFacts} from './mental-exam.js';
 
 const strip=s=>typeof s==='string'?s.trim():'';
 const MAX_NOTE=2200;
+export const VITAL_FIELDS=[['pa','PA','mmHg'],['fc','FC','lpm'],['fr','FR','rpm'],['temp','T°','°C'],['sat','SatO₂','%']];
+export function vitalSignsText(vitals={}){return VITAL_FIELDS.filter(([key])=>String(vitals?.[key]||'').trim()).map(([key,label,unit])=>`${label} ${String(vitals[key]).trim()} ${unit}`).join(', ')}
 export function presentSection(section,original){
   // Coincidencias SOLO orientativas. No transformarlas automáticamente en hallazgos de hoy.
   if(!strip(original))return [];
@@ -15,7 +17,7 @@ export function presentSection(section,original){
 export function emptyWorkflow(specialty='interna',docType='diaria'){
   if(!FLOW_SPECIALTIES[specialty])specialty='interna';
   if(!DOC_TYPES[docType])docType='diaria';
-  return {specialty,docType,previous:'',general:'',sections:FLOW_SPECIALTIES[specialty].sections.map(s=>({id:s.id,status:'pendiente',notes:'',selected:[],source:'no_precisada'})),obstetrics:{pregnancy:'no_informado',gestas:'',partos:'',perdidas:'',cesareas:'',vivos:'',fur:'',eg:'',fpp:''},trauma:{region:'rodilla',side:'no_informado',maneuver:'',result:''},custom:[],mentalExam:[],clinicalFormat:null,format:'adaptable',profile:null};
+  return {specialty,docType,previous:'',general:'',sections:FLOW_SPECIALTIES[specialty].sections.map(s=>({id:s.id,status:'pendiente',notes:'',selected:[],source:'no_precisada'})),obstetrics:{pregnancy:'no_informado',gestas:'',partos:'',perdidas:'',cesareas:'',vivos:'',fur:'',eg:'',fpp:''},trauma:{region:'rodilla',side:'no_informado',maneuver:'',result:''},custom:[],mentalExam:[],vitals:{pa:'',fc:'',fr:'',temp:'',sat:''},clinicalFormat:null,format:'adaptable',profile:null};
 }
 export function validateWorkflow(input){
   if(!input||typeof input!=='object'||!FLOW_SPECIALTIES[input.specialty]||!DOC_TYPES[input.docType])throw Error('Especialidad o modalidad inválida.');
@@ -62,18 +64,28 @@ export function validateWorkflow(input){
   const custom=input.custom.map((s,i)=>({id:'personal_'+i,label:strip(s.label).slice(0,65),status:statuses.includes(s.status)?s.status:'pendiente',notes:strip(s.notes).slice(0,MAX_NOTE),source:sourceChoices.includes(s.source)?s.source:'no_precisada'}));
   if(custom.some(s=>!s.label||s.status==='pendiente'&&s.notes||s.status!=='pendiente'&&!s.notes))throw Error('Revisa los apartados personalizados y sus observaciones.');
   const mentalExam=input.specialty==='psiquiatria'?validateMentalExam(input.mentalExam):[];
+  const vitals={pa:'',fc:'',fr:'',temp:'',sat:''};
+  if(input.specialty!=='psiquiatria'){
+   const raw=input.vitals||{};
+   if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Signos vitales inválidos.');
+   for(const key of Object.keys(vitals)){
+    const value=strip(raw[key]);
+    if(value.length>18||value&&!((key==='pa'&&/^\d{1,3}\/\d{1,3}$/.test(value))||(key==='temp'&&/^\d{1,2}(?:[.,]\d)?$/.test(value))||(key==='sat'&&/^\d{1,3}(?:[.,]\d)?$/.test(value)&&Number(value.replace(',','.'))<=100)||(key==='fc'||key==='fr')&&/^\d{1,3}$/.test(value)))throw Error(`Valor inválido de signo vital: ${key}.`);
+    vitals[key]=value;
+   }
+  }
   const obsData=obs?Object.entries(obs).filter(([k,v])=>Boolean(v)&&v!=='no_informado').map(([k,v])=>`${k}: ${v}`).join(' '):'';
   const traumaData=trauma&&(trauma.result||trauma.side!=='no_informado')?[trauma.region,trauma.side!=='no_informado'?trauma.side:'',trauma.maneuver,trauma.result].join(' '):'';
-  const info=[general,...sections.flatMap(s=>[s.notes,...s.selected]),...custom.map(s=>s.notes),mentalExamFacts(mentalExam),obsData,traumaData].join(' ').trim();
+  const info=[general,...sections.flatMap(s=>[s.notes,...s.selected]),...custom.map(s=>s.notes),mentalExamFacts(mentalExam),vitalSignsText(vitals),obsData,traumaData].join(' ').trim();
   if(info.length<12)throw Error('Escribe al menos un hallazgo actual o información del ingreso/control.');
   if(input.docType==='diaria'&&!previous)throw Error('Pega la evolución anterior para actualizarla; si no tienes una evolución previa, selecciona Nueva evolución.');
-  if(input.docType==='diaria'&&!general&&!mentalExam.length&&!sections.some(s=>s.status!=='pendiente')&&!custom.some(s=>s.status!=='pendiente')&&!obsData&&!traumaData)throw Error('Registra al menos un cambio o hallazgo del día.');
+  if(input.docType==='diaria'&&!general&&!mentalExam.length&&!sections.some(s=>s.status!=='pendiente')&&!custom.some(s=>s.status!=='pendiente')&&!obsData&&!traumaData&&!vitalSignsText(vitals))throw Error('Registra al menos un cambio o hallazgo del día.');
   const allText=[previous,info,typeof input.profile?.instruction==='string'?input.profile.instruction:''].join('\n');
   const hazards=scanSensitive(allText);if(hazards.length)throw Error('Posibles identificadores detectados: '+hazards.join(', ')+'. Usa solo casos ficticios.');
   const format=['adaptable','narrativo','sistemas','problemas'].includes(input.format)?input.format:'adaptable';
   const clinicalFormat=input.clinicalFormat?validateClinicalFormat(input.clinicalFormat,input.specialty):null;
   const profile=validateProfile(input.profile,input.specialty);
-  return {specialty:input.specialty,specialtyName:spec.name,docType:input.docType,docTypeName:DOC_TYPES[input.docType].label,previous:input.docType==='diaria'?previous:'',general,sections,obstetrics:obs,trauma,custom,mentalExam,clinicalFormat,format,profile};
+  return {specialty:input.specialty,specialtyName:spec.name,docType:input.docType,docTypeName:DOC_TYPES[input.docType].label,previous:input.docType==='diaria'?previous:'',general,sections,obstetrics:obs,trauma,custom,mentalExam,vitals,clinicalFormat,format,profile};
 }
 export function workflowFindings(data){
  const warnings=[],missing=[];
@@ -91,6 +103,30 @@ export function workflowFindings(data){
  return {warnings,missing};
 }
 export function workflowLocalDraft(data){
+ if(data.clinicalFormat?.headings?.length){
+  const headings=data.clinicalFormat.headings;
+  const bucket=new Map(headings.map(h=>[h,[]]));
+  const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const choose=(words)=>headings.find(h=>words.some(word=>norm(h).includes(word)))||null;
+  const add=(head,text)=>{if(!text)return;const h=head||choose(['evolucion','hallazg','evaluacion','motivo'])||headings[0];bucket.get(h).push(text)};
+  add(choose(['evolucion del dia','evolucion y hallazg','motivo de evaluacion']),data.general);
+  add(choose(['signos vital','vitales']),vitalSignsText(data.vitals));
+  if(data.obstetrics){const values=Object.entries(data.obstetrics).filter(([k,v])=>v&&v!=='no_informado'&&k!=='pregnancy').map(([k,v])=>k+': '+v);add(choose(['gineco','obstetric','antecedent']),values.join(' · '))}
+  if(data.trauma&&(data.trauma.result||data.trauma.side!=='no_informado'))add(choose(['examen','musculo','traumato']),[data.trauma.region,data.trauma.side!=='no_informado'?data.trauma.side:'',data.trauma.maneuver,data.trauma.result].filter(Boolean).join(' · '));
+  for(const m of data.mentalExam||[]){let preferred;
+   if(['consciencia','apariencia'].includes(m.id))preferred=choose(['presentacion','conciencia']);
+   else if(['actitud','psicomotricidad'].includes(m.id))preferred=choose(['actitud','psicomotricidad']);
+   else if(['animo','afectividad'].includes(m.id))preferred=choose(['animo','afectividad']);
+   else if(m.id.startsWith('pensamiento')||m.id==='lenguaje')preferred=choose(['pensamiento','lenguaje']);
+   else if(m.id==='sensopercepcion')preferred=choose(['sensopercep']);
+   else if(['insight','juicio'].includes(m.id))preferred=choose(['insight','juicio']);
+   else if(m.id==='riesgo')preferred=choose(['riesgo']);
+   add(preferred,mentalExamFacts([m]));
+  }
+  for(const section of [...data.sections,...data.custom])if(section.status!=='pendiente')add(choose([norm(section.label)]),[...(section.selected||[]),section.notes].filter(Boolean).join(' · '));
+  const text=headings.map(h=>{const content=bucket.get(h).join('\n');return content?`${h.toUpperCase()}\n${content}`:h.toUpperCase()}).join('\n\n').trim();
+  return {note:text,...workflowFindings(data)};
+ }
  const title=`${data.docTypeName.toUpperCase()} · ${data.specialtyName.toUpperCase()}`;
  const lines=[title];
  if(data.clinicalFormat?.headings?.length)lines.push('\nESTRUCTURA PREFERIDA (REVISAR Y ORGANIZAR MANUALMENTE)\n'+data.clinicalFormat.headings.join(' · '));
@@ -105,6 +141,7 @@ export function workflowLocalDraft(data){
  if(data.trauma&&(data.trauma.result||data.trauma.side!=='no_informado')){
    lines.push('\nLOCALIZACIÓN / MANIOBRA\n'+`Región: ${data.trauma.region}`+(data.trauma.side!=='no_informado'?` · Lado: ${data.trauma.side}`:'')+(data.trauma.result?` · ${data.trauma.maneuver}: ${data.trauma.result}`:''));
  }
+ if(vitalSignsText(data.vitals))lines.push('\nSIGNOS VITALES ACTUALES\n'+vitalSignsText(data.vitals));
  if(data.mentalExam?.length)lines.push('\nEXAMEN MENTAL · HALLAZGOS CONSIGNADOS\n'+mentalExamFacts(data.mentalExam));
  for(const s of [...data.sections,...data.custom]){
    if(s.status==='pendiente')continue;

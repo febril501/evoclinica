@@ -1,0 +1,7 @@
+import {cloudMe,cloudRequest} from './tora-cloud.js';
+const $=id=>document.getElementById(id),el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};
+const me=await cloudMe().catch(()=>null);if(me?.role!=='admin'||me.status!=='approved')location.replace('/');
+async function refresh(){const root=$('users-list');root.replaceChildren();try{const users=await cloudRequest('/api/admin/users');for(const u of users){const item=el('div','card');item.style.marginTop='12px';const h=el('h3','',u.display_name),meta=el('p','input-hint',`${u.role} · ${u.status} · ${new Date(u.created_at).toLocaleDateString('es-CL')}`),actions=el('div','action-grid');
+ for(const [status,label] of [['approved','Aprobar'],['pending','Dejar pendiente'],['suspended','Suspender']]){if(status===u.status)continue;const b=el('button','button soft',label);b.type='button';b.onclick=async()=>{if(!confirm(`¿Cambiar el estado de ${u.display_name} a ${status}?`))return;try{await cloudRequest('/api/admin/status',{method:'POST',body:JSON.stringify({user_id:u.id,new_status:status})});$('notice').textContent='Estado actualizado.';await refresh()}catch(e){$('notice').textContent=e.message}};actions.append(b)}item.append(h,meta,actions);root.append(item)}if(!users.length)root.append(el('p','','No hay usuarios.'))}catch(e){$('notice').textContent=e.message}}
+$('logout').onclick=()=>fetch('/api/logout',{method:'POST'}).finally(()=>location.replace('/login'));
+if(me?.role==='admin')await refresh();

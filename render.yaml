@@ -11,6 +11,12 @@ services:
         value: production
       - key: APP_USERS_JSON
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: TORA_AUTH_PROVIDER
+        sync: false
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL

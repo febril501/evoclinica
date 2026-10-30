@@ -1,6 +1,7 @@
 // TORA · Catálogo de hallazgos psicopatológicos inspirado en clases 6, 7 y 8.
 // Las opciones no constituyen diagnósticos y requieren constatación clínica explícita.
-const f=(id,label,options)=>({id,label,options});
+const OTHER='Otro (especificar)';
+const f=(id,label,options)=>({id,label,options:[...options,OTHER]});
 const d=(id,label,description,fields)=>({id,label,description,fields});
 export const MENTAL_DOMAINS=[
  d('consciencia','Conciencia, atención y orientación','Instrumentos del vivenciar: evaluar por separado nivel de alerta, orientación, atención y memoria.',[
@@ -52,7 +53,6 @@ export const MENTAL_DOMAINS=[
   f('plan','Plan e intención',['Niega plan tras exploración directa','Refiere plan suicida','Refiere intención suicida','Refiere acceso a medios']),
   f('antecedentes','Antecedentes referidos',['Refiere intentos previos','Refiere autolesiones previas','Niega intentos previos tras exploración directa'])])
 ];
-const validSources=['referido','observado','documentado'];
 export function emptyMentalExam(){return []}
 export function validateMentalExam(input){
  if(input===undefined||input===null)return [];
@@ -62,14 +62,23 @@ export function validateMentalExam(input){
   if(!item||!defs.has(item.id)||seen.has(item.id))throw Error('Componente del examen mental desconocido o duplicado.');seen.add(item.id);
   const def=defs.get(item.id);const picked=item.fields;
   if(!picked||typeof picked!=='object'||Array.isArray(picked))throw Error('Selecciones del examen mental inválidas.');
+  const other={};
+  if(item.other!==undefined){
+   if(!item.other||typeof item.other!=='object'||Array.isArray(item.other))throw Error('Descripción personalizada inválida.');
+   for(const [k,v] of Object.entries(item.other)){
+    if(!def.fields.some(f=>f.id===k)||typeof v!=='string'||v.trim().length>250)throw Error('Hallazgo personalizado inválido.');
+    if(v.trim())other[k]=v.trim();
+   }
+  }
   const fields={};for(const [key,value] of Object.entries(picked)){
-    const field=def.fields.find(x=>x.id===key);if(!field)throw Error('Hallazgo psicopatológico inválido.');const values=Array.isArray(value)?value:[value];if(!values.length||values.length>8||values.some(v=>typeof v!=='string'||!field.options.includes(v)))throw Error('Hallazgo psicopatológico inválido.');if(new Set(values).size!==values.length)throw Error('Hallazgo psicopatológico duplicado.');if(values.length>1&&values.some(v=>/^(Sin |Niega |Conservad|Dirigido a meta|Normofluente|Acorde |Eutímico)/.test(v)))throw Error('No combines normalidad o negación con hallazgos patológicos en la misma categoría.');fields[key]=values;
+    const field=def.fields.find(x=>x.id===key);if(!field)throw Error('Hallazgo psicopatológico inválido.');const values=Array.isArray(value)?value:[value];if(!values.length||values.length>8||values.some(v=>typeof v!=='string'||!field.options.includes(v)))throw Error('Hallazgo psicopatológico inválido.');if(new Set(values).size!==values.length)throw Error('Hallazgo psicopatológico duplicado.');
+    if(values.includes(OTHER)&&!other[key])throw Error(`Especifica el hallazgo «Otro» en ${field.label}.`);if(values.length>1&&values.some(v=>/^(Sin |Niega |Conservad|Dirigido a meta|Normofluente|Acorde |Eutímico)/.test(v)))throw Error('No combines normalidad o negación con hallazgos patológicos en la misma categoría.');fields[key]=values;
   }
   const notes=typeof item.notes==='string'?item.notes.trim():'';
   if(notes.length>1600)throw Error('Descripción psicopatológica demasiado extensa.');
   if(!Object.keys(fields).length&&!notes)continue;
-  output.push({id:item.id,label:def.label,fields,notes,source:validSources.includes(item.source)?item.source:'no_precisada'});
+  output.push({id:item.id,label:def.label,fields,other,notes});
  }
  return output;
 }
-export function mentalExamFacts(items){return items.map(x=>`${x.label}: ${Object.values(x.fields).flat().join('; ')}${x.notes?' · '+x.notes:''}${x.source&&x.source!=='no_precisada'?' [Fuente: '+x.source+']':''}`).join('\n')}
+export function mentalExamFacts(items){return items.map(x=>`${x.label}: ${Object.entries(x.fields).flatMap(([k,v])=>v.map(t=>t===OTHER?`Otro (${k}): ${x.other?.[k]||''}`:t)).join('; ')}${x.notes?' · '+x.notes:''}`).join('\n')}
