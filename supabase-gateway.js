@@ -26,18 +26,29 @@ export function createSupabaseGateway(){
  function throttle(ip){const now=Date.now(),old=attempts.get(ip);const a=!old||now>old.until?{n:0,until:now+RATE_MS}:old;if(a.n>=10)throw err('Demasiados intentos. Intenta nuevamente más tarde.',429);a.n++;attempts.set(ip,a);}
  async function request(path,{method='GET',token,body,extraHeaders={}}={}){
   const headers={'apikey':cfg.key,'Content-Type':'application/json',...extraHeaders};
-  headers.Authorization=`Bearer ${token||cfg.key}`; // Auth anónimo: key publicable; datos: JWT del usuario.
+  // Las claves sb_publishable_ NO son JWT. Para registro/recuperación basta apikey.
+  // Solo las consultas de usuarios autenticados envían su JWT real en Authorization.
+  if(token)headers.Authorization=`Bearer ${token}`;
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
   try{
    const r=await fetch(cfg.url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
    const text=await r.text();let data=null;try{data=text?JSON.parse(text):null}catch{data=null}
    if(!r.ok){
     // No exponer respuestas arbitrarias ni credenciales del proveedor.
-    if(r.status===401||r.status===403)throw err('No autorizado por Supabase. Comprueba tu cuenta y permisos.',r.status);
+    if(r.status===401||r.status===403)throw err('Supabase rechazó la autenticación. Comprueba las claves y permisos.',r.status);
     if(r.status===429)throw err('Demasiadas solicitudes. Intenta nuevamente más tarde.',429);
     if(r.status===409)throw err('Registro duplicado. Revisa los datos.',409);
-    const message=typeof data?.msg==='string'?data.msg:typeof data?.message==='string'?data.message:'';
-    throw err((r.status===400&&/invalid login credentials/i.test(message))?'Correo o contraseña incorrectos.':`Supabase rechazó la operación (${r.status}).`,r.status===400?400:502);
+    const message=String(data?.msg||data?.message||data?.error_description||'');
+    const code=String(data?.code||data?.error_code||'');
+    // Mostrar únicamente errores conocidos, con mensajes breves que permitan corregir el registro.
+    if(/invalid login credentials/i.test(message))throw err('Correo o contraseña incorrectos.',400);
+    if(/signup[_ ]disabled|signups? (are )?disabled/i.test(code+' '+message))throw err('El registro está desactivado en Supabase → Authentication.',403);
+    if(/email[_ ]rate[_ ]limit|over_email_send_rate_limit|rate limit.*email/i.test(code+' '+message))throw err('Supabase alcanzó el límite de correos. Reintenta más tarde o configura SMTP.',429);
+    if(/database error saving new user|database error creating new user/i.test(message))throw err('Supabase no pudo crear el perfil. Revisa Authentication → Logs y el trigger de profiles.',502);
+    if(/password.*(weak|short)|weak_password/i.test(code+' '+message))throw err('Supabase rechazó la contraseña: usa una más segura.',400);
+    if(r.status===422)throw err('Supabase rechazó los datos de registro. Comprueba el correo y la contraseña.',422);
+    if(r.status===400)throw err('Supabase rechazó la solicitud. Revisa los datos ingresados.',400);
+    throw err(`Supabase rechazó la operación (${r.status}).`,502);
    }
    return data;
   }catch(e){if(e.name==='AbortError')throw err('Supabase no respondió a tiempo.',504);throw e}finally{clearTimeout(timer)}
