@@ -80,7 +80,9 @@ export function createSupabaseGateway(){
  async function rest(path,token,options){return request('/rest/v1'+path,{...options,token})}
  async function profile(token){const out=await rest('/profiles?select=id,display_name,status,role&limit=1',token);return Array.isArray(out)?out[0]||null:null}
  async function storeSession(tokenData){
-  if(!isText(tokenData?.access_token,30,5000)||!isText(tokenData?.refresh_token,15,5000))throw err('Sesión inválida.');
+  // Supabase puede emitir refresh tokens heredados válidos de 12 caracteres.
+  // La autenticidad de la identidad se comprueba justo después contra /auth/v1/user.
+  if(!isText(tokenData?.access_token,30,5000)||!isText(tokenData?.refresh_token,12,5000))throw err('Sesión inválida.');
   const identity=await auth('/user',{token:tokenData.access_token});
   if(!identity?.id)throw err('No se pudo verificar la identidad.',401);
   const sid=randomBytes(32).toString('base64url');
